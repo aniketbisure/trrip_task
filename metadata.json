@@ -1,0 +1,6 @@
+{
+  "name": "AI Travel Itinerary Generator",
+  "description": "A full-stack web application designed for Team Trrip where users upload travel bookings to extract information and automatically generate shareable, AI-powered itineraries.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
