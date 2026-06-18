@@ -2,10 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Compass,
   Plane,
-  Hotel,
   Calendar,
   MapPin,
-  Clock,
   Share2,
   Copy,
   Check,
@@ -19,27 +17,14 @@ import {
   FileText,
   Sparkles,
   ChevronRight,
-  Download,
   AlertCircle,
   X,
   UploadCloud,
   FileCode,
-  Languages,
   Zap
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Itinerary, User as UserType } from "./types";
-
-// Layout Component
-const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return (
-    <div className="min-h-screen text-gray-100 flex flex-col items-center p-4 sm:p-6 lg:p-8 font-sans">
-      <div className="w-full max-w-4xl">
-        {children}
-      </div>
-    </div>
-  );
-};
 
 const CAPTIONS = [
   "Gathering suggestions from quiet neighborhood guides...",

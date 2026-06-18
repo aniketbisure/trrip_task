@@ -1,13 +1,14 @@
-import { Router, Response } from "express";
+import { Router } from "express";
 import multer from "multer";
 import { GoogleGenAI, Type } from "@google/genai";
 import jwt from "jsonwebtoken";
-import { db, DayPlan, ItineraryDoc } from "../db/db.js";
-import { authenticateToken, AuthenticatedRequest } from "../middleware/auth.js";
+import { db, DayPlan } from "../db/db.js";
+import { authenticateToken } from "../middleware/auth.js";
 import { PDFParse } from "pdf-parse";
 import os from "os";
 import fs from "fs";
 import rateLimit from "express-rate-limit";
+import crypto from "crypto";
 
 const router = Router();
 
@@ -15,7 +16,10 @@ const router = Router();
 const upload = multer({
   storage: multer.diskStorage({
     destination: os.tmpdir(),
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+    filename: (req, file, cb) => {
+      const ext = file.originalname.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "upload";
+      cb(null, `${Date.now()}-${crypto.randomUUID()}.${ext}`);
+    }
   }),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max sizing
 });
@@ -53,7 +57,8 @@ async function tryGetUserId(authHeader?: string): Promise<{ userId?: string; use
   const token = authHeader.split(" ")[1];
   if (!token) return null;
   try {
-    const JWT_SECRET = process.env.JWT_SECRET || "trrip_secure_jwt_secret_token_key_2026";
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) return null;
     const payload = jwt.verify(token, JWT_SECRET) as { userId: string; email: string; name: string };
     return { userId: payload.userId, userName: payload.name };
   } catch (e) {
@@ -80,7 +85,6 @@ router.post("/generate", generateLimiter, upload.single("file") as any, async (r
     const creatorName = userSession?.userName || "Traveler Guest";
 
     let resultJson: any = null;
-    let fallbackCause = "";
     let extractedText = "";
 
     // If Gemini API Key is missing, give clear error message
@@ -139,7 +143,8 @@ router.post("/generate", generateLimiter, upload.single("file") as any, async (r
             // Safe fallbacks based on original extension
             const ext = file.originalname.split(".").pop()?.toLowerCase();
             if (ext === "pdf") mimeType = "application/pdf";
-            else if (["png", "jpeg", "jpg"].includes(ext || "")) mimeType = "image/png";
+            else if (ext === "png") mimeType = "image/png";
+            else if (["jpeg", "jpg"].includes(ext || "")) mimeType = "image/jpeg";
             else mimeType = "image/png"; // Default fallback
           }
 
@@ -185,7 +190,7 @@ router.post("/generate", generateLimiter, upload.single("file") as any, async (r
           contents = promptText + `\nThe user provided this text summary of their bookings:\n"""\n${rawText}\n"""`;
         }
 
-        let aiResponse;
+        let aiResponse: Awaited<ReturnType<ReturnType<typeof getAiClient>["models"]["generateContent"]>> | undefined;
         let attempt = 0;
         const maxRetries = 3;
         while (attempt <= maxRetries) {
@@ -247,6 +252,10 @@ router.post("/generate", generateLimiter, upload.single("file") as any, async (r
           }
         }
 
+        if (!aiResponse) {
+          throw new Error("Gemini did not return a response after retry attempts.");
+        }
+
         const rawResultText = aiResponse.text;
         if (!rawResultText) {
           throw new Error("Empty response received from Gemini engine.");
@@ -260,7 +269,7 @@ router.post("/generate", generateLimiter, upload.single("file") as any, async (r
     }
 
     // Generate custom share ID
-    const shareId = Math.random().toString(36).substring(2, 9) + Date.now().toString(36).substring(5, 9);
+    const shareId = crypto.randomBytes(8).toString("hex");
 
     // Save itinerary to database
     const savedDoc = await db.itineraries.create({
@@ -277,9 +286,7 @@ router.post("/generate", generateLimiter, upload.single("file") as any, async (r
 
     res.status(201).json({
       itinerary: savedDoc,
-      extractedPreview: extractedText ? extractedText.substring(0, 500) + "..." : null,
-      fallbackUsed: fallbackCause ? true : false,
-      fallbackMessage: fallbackCause ? `Gemini API fallback engaged due to: ${fallbackCause}` : undefined
+      extractedPreview: extractedText ? extractedText.substring(0, 500) + "..." : null
     });
 
   } catch (error: any) {

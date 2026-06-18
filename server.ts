@@ -1,20 +1,25 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import dotenv from "dotenv";
 import cors from "cors";
-import { fileURLToPath } from 'url';
-
-// Load environment variables
-dotenv.config();
-console.log('JWT_SECRET:', process.env.JWT_SECRET);
 
 import authRouter from "./server/routes/auth.js";
 import itineraryRouter from "./server/routes/itinerary.js";
+import { initializeDatabase } from "./server/db/db.js";
 
 async function startServer() {
+  await initializeDatabase();
+
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT || 3000);
+  const allowedOrigins = (process.env.FRONTEND_URL || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  app.set("trust proxy", 1);
+  app.disable("x-powered-by");
 
   // Limit payload sizes to 1mb to prevent memory exhaustion DoS attacks
   app.use(express.json({ limit: "1mb" }));
@@ -22,9 +27,7 @@ async function startServer() {
 
   // Strict CORS Headers for Production Security
   app.use(cors({
-    origin: process.env.NODE_ENV === "production" 
-      ? (process.env.FRONTEND_URL || "https://trrip.com") // Replace with actual production domain
-      : "*",
+    origin: process.env.NODE_ENV === "production" ? allowedOrigins : "*",
     methods: ["GET", "PUT", "POST", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "Content-Length", "X-Requested-With"]
   }));
@@ -66,15 +69,15 @@ async function startServer() {
 // Global uncaught error handlers to prevent silent process exits
 process.on("uncaughtException", (err) => {
   console.error("FATAL: Uncaught Exception:", err);
-  // In production, you might want to gracefully shutdown or notify a monitoring service here
+  process.exit(1);
 });
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("FATAL: Unhandled Promise Rejection at:", promise, "reason:", reason);
+  process.exit(1);
 });
 
 startServer().catch((err) => {
   console.error("Critical server launch failure:", err);
   process.exit(1);
 });
-

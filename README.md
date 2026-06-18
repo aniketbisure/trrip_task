@@ -22,8 +22,7 @@ trripdoc-ai/
 │   ├── App.tsx          # Main React Application & UI components
 │   ├── main.tsx         # App Entry Point
 │   ├── index.css        # Core custom styles (Tailwind + Glassmorphism)
-│   ├── types.ts         # TypeScript models (Itinerary, DayPlan, User)
-│   └── custom.d.ts      # Custom modules types declarations
+│   └── types.ts         # TypeScript models (Itinerary, DayPlan, User)
 ├── server/              # Express Backend
 │   ├── db/
 │   │   └── db.ts        # Mongoose connector + unified local database fallback
@@ -32,7 +31,7 @@ trripdoc-ai/
 │   └── routes/
 │       ├── auth.ts      # User register, login, & verification routes
 │       └── itinerary.ts # File upload, data parsing, & Gemini generation routes
-├── data/                # Local database fallback storage (JSON files)
+├── data/                # Development-only local fallback storage
 ├── server.ts            # Node.js Express server entrypoint
 └── package.json         # Node.js dependencies & run scripts
 ```
@@ -52,7 +51,7 @@ Create a `.env` file in the root directory and configure the variables (see [.en
 
 ```env
 GEMINI_API_KEY="your_api_key_here"
-MONGODB_URI="mongodb+srv://..." # Optional. Falls back to data/ folder if empty
+MONGODB_URI="mongodb+srv://..." # Required in production. Development can fall back to data/ if empty.
 JWT_SECRET="your_jwt_signing_key_here"
 ```
 

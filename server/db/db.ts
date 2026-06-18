@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 import fs from "fs";
 import path from "path";
-import bcrypt from "bcryptjs";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 
@@ -79,46 +78,51 @@ const ItinerarySchema = new mongoose.Schema({
 let UserModel: any = null;
 let ItineraryModel: any = null;
 
-try {
+function ensureModels() {
+  UserModel = mongoose.models.User || mongoose.model("User", UserSchema);
+  ItineraryModel = mongoose.models.Itinerary || mongoose.model("Itinerary", ItinerarySchema);
+}
+
+function isProduction() {
+  return process.env.NODE_ENV === "production";
+}
+
+function assertFallbackAllowed(error: unknown): void {
+  if (isProduction()) {
+    throw error;
+  }
+}
+
+export async function initializeDatabase(): Promise<void> {
   const mongoUri = process.env.MONGODB_URI;
   if (mongoUri) {
     console.log("Database: MONGODB_URI found. Connecting...");
-    // Connect to MongoDB with 3s timeout and handle promise rejection gracefully
-    mongoose.connect(mongoUri, {
+    ensureModels();
+
+    await mongoose.connect(mongoUri, {
       serverSelectionTimeoutMS: 3000,
-    }).then(() => {
-      console.log("Database: Successfully connected to MongoDB Atlas!");
-      useMongoose = true;
-    }).catch((err: any) => {
-      console.error("Database: Initial MongoDB Atlas connection failed. Falling back to robust local JSON store.", err.message);
-      useMongoose = false;
     });
-    
+
+    useMongoose = true;
+    console.log("Database: Successfully connected to MongoDB Atlas!");
+
     mongoose.connection.on("connected", () => {
       console.log("Database: Successfully connected to MongoDB Atlas!");
       useMongoose = true;
     });
 
     mongoose.connection.on("error", (err) => {
-      console.error("Database: MongoDB socket/connection error. Keeping fallback active.", err.message);
+      console.error("Database: MongoDB socket/connection error.", err.message);
       useMongoose = false;
     });
+    return;
+  }
 
-    UserModel = mongoose.models.User || mongoose.model("User", UserSchema);
-    ItineraryModel = mongoose.models.Itinerary || mongoose.model("Itinerary", ItinerarySchema);
-  } else {
-    if (process.env.NODE_ENV === "production") {
-      console.error("FATAL ERROR: MONGODB_URI is required in production. Local JSON store is disabled.");
-      process.exit(1);
-    }
-    console.log("Database: No MONGODB_URI set. Using robust local JSON fallback store.");
+  if (isProduction()) {
+    throw new Error("MONGODB_URI is required in production. Local JSON store is disabled.");
   }
-} catch (e: any) {
-  if (process.env.NODE_ENV === "production") {
-    console.error("FATAL ERROR: Failed to initialize MongoDB in production:", e.message);
-    process.exit(1);
-  }
-  console.error("Database: Error initializing MongoDB. Falling back to JSON store:", e.message);
+
+  console.log("Database: No MONGODB_URI set. Using robust local JSON fallback store.");
   useMongoose = false;
 }
 
@@ -133,6 +137,10 @@ const USERS_FILE = path.join(DATA_DIR, "users.json");
 const ITINERARIES_FILE = path.join(DATA_DIR, "itineraries.json");
 
 function readJsonFile<T>(filePath: string, defaultVal: T): T {
+  if (isProduction()) {
+    throw new Error("Local JSON fallback storage is disabled in production.");
+  }
+
   try {
     if (fs.existsSync(filePath)) {
       const data = fs.readFileSync(filePath, "utf-8");
@@ -146,6 +154,10 @@ function readJsonFile<T>(filePath: string, defaultVal: T): T {
 }
 
 function writeJsonFile<T>(filePath: string, data: T) {
+  if (isProduction()) {
+    throw new Error("Local JSON fallback storage is disabled in production.");
+  }
+
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
   } catch (e) {
@@ -177,6 +189,7 @@ export const db = {
           }
           return null;
         } catch (e) {
+          assertFallbackAllowed(e);
           console.error("Mongoose findOne error, checking fallback:", e);
         }
       }
@@ -200,6 +213,7 @@ export const db = {
             };
           }
         } catch (e) {
+          assertFallbackAllowed(e);
           console.error("Mongoose findById error:", e);
         }
       }
@@ -225,6 +239,7 @@ export const db = {
             createdAt: u.createdAt,
           };
         } catch (e) {
+          assertFallbackAllowed(e);
           console.error("Mongoose create user error, using fallback:", e);
         }
       }
@@ -273,6 +288,7 @@ export const db = {
             createdAt: doc.createdAt,
           };
         } catch (e) {
+          assertFallbackAllowed(e);
           console.error("Mongoose create itinerary error, using fallback:", e);
         }
       }
@@ -309,6 +325,7 @@ export const db = {
             createdAt: doc.createdAt,
           }));
         } catch (e) {
+          assertFallbackAllowed(e);
           console.error("Mongoose findByUser error, checking fallback:", e);
         }
       }
@@ -340,6 +357,7 @@ export const db = {
           }
           return null;
         } catch (e) {
+          assertFallbackAllowed(e);
           console.error("Mongoose findByShareId error, checking fallback:", e);
         }
       }
@@ -354,6 +372,7 @@ export const db = {
           const res = await ItineraryModel.deleteOne({ _id: id, userId: new mongoose.Types.ObjectId(userId) });
           return res.deletedCount > 0;
         } catch (e) {
+          assertFallbackAllowed(e);
           console.error("Mongoose delete itinerary error, trying local fallback:", e);
         }
       }

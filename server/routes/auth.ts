@@ -1,8 +1,8 @@
-import { Router, Response } from "express";
+import { Router } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { db } from "../db/db.js";
-import { authenticateToken, AuthenticatedRequest } from "../middleware/auth.js";
+import { authenticateToken } from "../middleware/auth.js";
 
 const router = Router();
 let JWT_SECRET = process.env.JWT_SECRET;
