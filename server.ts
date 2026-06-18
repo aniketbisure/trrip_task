@@ -9,10 +9,9 @@ import itineraryRouter from "./server/routes/itinerary.js";
 import { initializeDatabase } from "./server/db/db.js";
 
 async function startServer() {
-  await initializeDatabase();
-
   const app = express();
   const PORT = Number(process.env.PORT || 3000);
+  let databaseStatus: "starting" | "connected" | "failed" = "starting";
   const allowedOrigins = (process.env.FRONTEND_URL || "")
     .split(",")
     .map((origin) => origin.trim())
@@ -34,7 +33,7 @@ async function startServer() {
 
   // Health check endpoint
   app.get("/api/health", (req, res) => {
-    res.json({ status: "healthy", timestamp: new Date() });
+    res.json({ status: "healthy", database: databaseStatus, timestamp: new Date() });
   });
 
   // Load API Routers
@@ -64,6 +63,17 @@ async function startServer() {
     console.log(`🌍 Endpoint: http://localhost:${PORT}`);
     console.log(`===============================================`);
   });
+  initializeDatabase()
+    .then(() => {
+      databaseStatus = "connected";
+    })
+    .catch((err) => {
+      databaseStatus = "failed";
+      console.error("Critical database initialization failure:", err);
+      if (process.env.NODE_ENV === "production") {
+        process.exit(1);
+      }
+    });
 }
 
 // Global uncaught error handlers to prevent silent process exits
